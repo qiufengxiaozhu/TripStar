@@ -1,7 +1,7 @@
-# 🌟 旅途星辰 (TripStar) - AI 旅行智能体
+# 旅途星辰 (TripStar) - AI 旅行智能体
 
 > **基于 HelloAgents 框架打造的多智能体协作文旅规划平台**
-<img width="1574" height="315" alt="git封面f" src="https://github.com/user-attachments/assets/4f03874d-ef3d-437c-a2f1-b0a5ab70b923" />
+<img width="1418" height="619" alt="PixPin_2026-03-11_00-38-31" src="https://github.com/user-attachments/assets/43d55fdf-beb2-47ea-b4a0-219613524776" />
 <p align="center">
   <img src="https://img.shields.io/badge/license-GPL--2.0-orange">
   <img src="https://img.shields.io/badge/version-v0.1.0-green">
@@ -17,7 +17,7 @@
 > 
 > 其中包括：旅行计划、景点地图、预算明细、每日行程：行程描述、交通方式、住宿推荐、景点安排（地址、游览时长、景点描述）、餐饮安排、天气信息、知识图谱可视化、沉浸式伴游 AI 问答......
 
-## 📖 项目简介
+## 项目简介
 
 **旅途星辰 (TripStar)** 是一个创新的 AI 文旅智能体应用，基于 HelloAgents 框架打造的多智能体协作文旅规划平台，旨在解决用户在规划旅行时面临的“信息过载”和“决策疲劳”问题。
 
@@ -25,18 +25,18 @@
 
 ### 核心亮点
 
-* **🤖 多智能体协作协同**: 采用分工明确的多个 Agent（如景点规划师、天气预报员、酒店推荐专家），通过工作流 (Workflow) 协同完成复杂的旅行规划任务。
-* **⚡️ 并发执行优化**: 将互不依赖的子任务（如搜索景点、查询天气、精选酒店）利用 `asyncio.gather` 进行并发执行，将响应时间从串行的 $T_1+T_2+T_3$ 大幅缩短至 $\max(T_1, T_2, T_3)$。
-* **🔗 知识图谱可视化**: 将生成的行程数据实时转换为节点关系图（基于 ECharts的力导向图），直观展示“城市-天数-行程节点-预算”的空间结构。
-* **💬 沉浸式伴游 AI 问答**: 在生成报告后，提供悬浮式 AI 问答窗口。AI 拥有完整行程的上下文记忆，用户可随时针对行程细节（如票价、餐饮）进行追问。
-* **🛠️ MCP 工具调用能力**: 深度集成 Model Context Protocol (MCP)，通过 `uvx amap-mcp-server` 实时调用高德地图 API，获取精准真实的地理和 POI 数据。
-* **✨ 奢华暗黑玻璃拟物风**: 全新设计的暗黑系玻璃拟物化 (Dark Luxury Glassmorphism) 界面，提供极具沉浸感的高级视觉体验。
+* **多智能体协作协同**: 采用分工明确的多个 Agent（如景点规划师、天气预报员、酒店推荐专家），通过工作流 (Workflow) 协同完成复杂的旅行规划任务。
+* **并发执行优化**: 将互不依赖的子任务（如搜索景点、查询天气、精选酒店）利用 `asyncio.gather` 进行并发执行，将响应时间从串行的 $T_1+T_2+T_3$ 大幅缩短至 $\max(T_1, T_2, T_3)$。
+* **知识图谱可视化**: 将生成的行程数据实时转换为节点关系图（基于 ECharts的力导向图），直观展示“城市-天数-行程节点-预算”的空间结构。
+* **沉浸式伴游 AI 问答**: 在生成报告后，提供悬浮式 AI 问答窗口。AI 拥有完整行程的上下文记忆，用户可随时针对行程细节（如票价、餐饮）进行追问。
+* **MCP 工具调用能力**: 深度集成 Model Context Protocol (MCP)，通过 `uvx amap-mcp-server` 实时调用高德地图 API，获取精准真实的地理和 POI 数据。
+* **奢华暗黑玻璃拟物风**: 全新设计的暗黑系玻璃拟物化 (Dark Luxury Glassmorphism) 界面，提供极具沉浸感的高级视觉体验。
 ---
 > 举个例子要去中国杭州玩耍，只需要填写地点、日期、偏好设置，即可等待行程规划的结果
-<img width="1459" height="910" alt="image" src="https://github.com/user-attachments/assets/c6094a69-bafa-4a95-92e2-e22129b65aae" />
+<img width="2733" height="1206" alt="PixPin_2026-03-11_00-36-25" src="https://github.com/user-attachments/assets/460dbe44-20ac-432f-a656-7ae707af7a78" />
 
 
-## 🏗️ 系统架构
+## 系统架构
 
 本项目采用标准的前后端分离架构，分为前端 Vue 交互层、后端 FastAPI 服务层和 LLM/Agents 的智能推理层。
 
@@ -88,7 +88,7 @@ graph TD
 
 ---
 
-## 🧩 核心功能与工作流
+## 核心功能与工作流
 
 ### 1. 异步轮询任务系统 (解决网关超时)
 
@@ -114,7 +114,7 @@ graph TD
 
 ---
 
-## 💻 快速部署与运行指北
+## 快速部署与运行指北
 
 ### 环境准备
 
@@ -173,7 +173,7 @@ npm run dev
 
 ---
 
-## 📂 目录结构与关键代码导读
+## 目录结构与关键代码导读
 
 ```text
 helloagents-trip-planner-new/
@@ -198,10 +198,11 @@ helloagents-trip-planner-new/
 └── README.md
 ```
 
-> 下面是部分运行结果，丰富的功能探索ing，欢迎大家提issues🦖
+> 下面是部分运行结果，丰富的功能探索ing，欢迎大家提issues
+
 <img width="500" height="1818" alt="旅行计划_杭州_1772887217932" src="https://github.com/user-attachments/assets/ced55dae-e03e-433a-af9d-9f3c26d34563" />
 
-## 🛠️ 后续可扩展方向 (Roadmap)
+## 后续可扩展方向 (Roadmap)
 
 1. **真实环境检索强化**: 当前依赖模型自身基础数据的景点信息，偶尔会存在模型臆想的情况。后续可增加专用的搜索引擎工具流（Tavily/SearXNG）。
 2. **知识记忆库 (Zep)**: 虽然现在前端能将整段 JSON 返回给大语言模型进行 AI 答疑，但长对话将快速消耗 Token。可引入 **向量数据库Zep** 管理该应用中长期对话图景。
