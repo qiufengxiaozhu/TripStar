@@ -1,7 +1,11 @@
 """多智能体旅行规划系统"""
 
 import json
+import re
+import sys
 import asyncio
+import traceback
+from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
@@ -9,73 +13,99 @@ from ..services.llm_service import get_llm
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
 
+
+def log(msg: str):
+    """带刷新的日志输出，确保 PyCharm 控制台实时可见"""
+    print(msg, flush=True)
+
+
+class WrappedMCPTool:
+    """包装 MCPTool，自动将平铺参数重组为 MCPTool 期望的嵌套格式"""
+
+    RESERVED_KEYS = {"action", "tool_name", "uri", "prompt_name", "prompt_arguments"}
+
+    def __init__(self, mcp_tool):
+        self._mcp_tool = mcp_tool
+        self.name = mcp_tool.name
+        self.description = mcp_tool.description
+
+    def run(self, parameters):
+        if "tool_name" in parameters and "arguments" not in parameters:
+            arguments = {k: v for k, v in parameters.items() if k not in self.RESERVED_KEYS}
+            parameters = {k: v for k, v in parameters.items() if k in self.RESERVED_KEYS}
+            parameters["arguments"] = arguments
+        log(f"[MCP] Calling tool with params: {parameters}")
+        return self._mcp_tool.run(parameters)
+
+    def get_description(self):
+        if hasattr(self._mcp_tool, "get_description"):
+            return self._mcp_tool.get_description()
+        return self.description
+
 # ============ Agent提示词 ============
 
 ATTRACTION_AGENT_PROMPT = """你是景点搜索专家。你的任务是根据城市和用户偏好搜索合适的景点。
 
 **重要提示:**
 1. 你必须使用工具来搜索景点!不要自己编造景点信息!
-2. 系统为你绑定的真实工具名称叫做 `amap_maps_text_search`，你**只能而且必须**原样输出这个名字。绝对不要输出 `amap` 或者 `action=...` 这样的自定义格式！
+2. 系统为你绑定的工具名称叫做 `amap`，调用时需要传入 tool_name 和 arguments 参数。
 
 **工具调用格式:**
-使用maps_text_search工具时,必须严格按照以下单行格式输出，**不要带任何多余的字符或JSON block**:
-`[TOOL_CALL:amap_maps_text_search:keywords=景点关键词,city=城市名]`
+`[TOOL_CALL:amap:tool_name=maps_text_search,keywords=景点关键词,city=城市名]`
 
 **示例:**
 用户: "搜索北京的历史文化景点"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=历史文化,city=北京]
+你的回复: [TOOL_CALL:amap:tool_name=maps_text_search,keywords=历史文化,city=北京]
 
 用户: "搜索上海的公园"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=公园,city=上海]
+你的回复: [TOOL_CALL:amap:tool_name=maps_text_search,keywords=公园,city=上海]
 
 **注意:**
 1. 必须使用工具,不要直接回答
 2. 格式必须完全正确,包括方括号和冒号
-3. 必须输出 `amap_maps_text_search` 作为工具名。
+3. 工具名必须是 `amap`，通过 tool_name 参数指定具体操作
 """
 
 WEATHER_AGENT_PROMPT = """你是天气查询专家。你的任务是查询指定城市的天气信息。
 
 **重要提示:**
 1. 你必须使用工具来查询天气!不要自己编造天气信息!
-2. 系统为你绑定的真实工具名称叫做 `amap_maps_weather`，你**只能而且必须**原样输出这个名字。
+2. 系统为你绑定的工具名称叫做 `amap`，调用时需要传入 tool_name 和 arguments 参数。
 
 **工具调用格式:**
-使用maps_weather工具时,必须严格按照以下单行格式输出，**不要带任何多余的字符或JSON block**:
-`[TOOL_CALL:amap_maps_weather:city=城市名]`
+`[TOOL_CALL:amap:tool_name=maps_weather,city=城市名]`
 
 **示例:**
 用户: "查询北京天气"
-你的回复: [TOOL_CALL:amap_maps_weather:city=北京]
+你的回复: [TOOL_CALL:amap:tool_name=maps_weather,city=北京]
 
 用户: "上海的天气怎么样"
-你的回复: [TOOL_CALL:amap_maps_weather:city=上海]
+你的回复: [TOOL_CALL:amap:tool_name=maps_weather,city=上海]
 
 **注意:**
 1. 必须使用工具,不要直接回答
 2. 格式必须完全正确,包括方括号和冒号
-3. 必须输出 `amap_maps_weather` 作为工具名。
+3. 工具名必须是 `amap`，通过 tool_name 参数指定具体操作
 """
 
 HOTEL_AGENT_PROMPT = """你是酒店推荐专家。你的任务是根据城市和景点位置推荐合适的酒店。
 
 **重要提示:**
 1. 你必须使用工具来搜索酒店!不要自己编造酒店信息!
-2. 系统为你绑定的真实工具名称叫做 `amap_maps_text_search`，你**只能而且必须**原样输出这个名字。
+2. 系统为你绑定的工具名称叫做 `amap`，调用时需要传入 tool_name 和 arguments 参数。
 
 **工具调用格式:**
-使用maps_text_search工具搜索酒店时,必须严格按照以下单行格式输出，**不要带任何多余的字符或JSON block**:
-`[TOOL_CALL:amap_maps_text_search:keywords=酒店,city=城市名]`
+`[TOOL_CALL:amap:tool_name=maps_text_search,keywords=酒店,city=城市名]`
 
 **示例:**
 用户: "搜索北京的酒店"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=酒店,city=北京]
+你的回复: [TOOL_CALL:amap:tool_name=maps_text_search,keywords=酒店,city=北京]
 
 **注意:**
 1. 必须使用工具,不要直接回答
 2. 格式必须完全正确,包括方括号和冒号
 3. 关键词使用"酒店"或"宾馆"
-4. 必须输出 `amap_maps_text_search` 作为工具名。
+4. 工具名必须是 `amap`，通过 tool_name 参数指定具体操作
 """
 
 PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据景点信息和天气信息,生成详细的旅行计划。
@@ -144,17 +174,20 @@ PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据景点
 ```
 
 **重要提示:**
-1. weather_info数组必须包含每一天的天气信息
-2. 温度必须是纯数字(不要带°C等单位)
-3. 每天安排2-3个景点
-4. 考虑景点之间的距离和游览时间
-5. 每天必须包含早中晚三餐
-6. 提供实用的旅行建议
-7. **必须包含预算信息**:
+1. **你不需要调用任何工具！所有需要的信息已经在上面提供给你了！**
+2. **你必须直接输出JSON，不要输出任何工具调用、XML标签或其他格式！**
+3. weather_info数组必须包含每一天的天气信息
+4. 温度必须是纯数字(不要带°C等单位)
+5. 每天安排2-3个景点
+6. 考虑景点之间的距离和游览时间
+7. 每天必须包含早中晚三餐
+8. 提供实用的旅行建议
+9. **必须包含预算信息**:
    - 景点门票价格(ticket_price)
    - 餐饮预估费用(estimated_cost)
    - 酒店预估费用(estimated_cost)
    - 预算汇总(budget)包含各项总费用
+10. **输出格式：只输出一个完整的JSON代码块，用```json和```包裹，不要输出其他任何内容！**
 """
 
 
@@ -163,24 +196,29 @@ class MultiAgentTripPlanner:
 
     def __init__(self):
         """初始化多智能体系统"""
-        print("🔄 开始初始化多智能体旅行规划系统...")
+        log("=" * 60)
+        log("[INIT] 开始初始化多智能体旅行规划系统...")
 
         try:
             settings = get_settings()
-            self.llm = get_llm()
+            log(f"[INIT] 高德地图Key: {'已配置' if settings.vite_amap_web_key else '未配置'}")
 
-            # 创建共享的MCP工具(只创建一次)
-            print("  - 创建共享MCP工具...")
-            self.amap_tool = MCPTool(
+            log("[INIT] 正在创建LLM实例...")
+            self.llm = get_llm()
+            log(f"[INIT] LLM实例创建成功 - provider={self.llm.provider}, model={self.llm.model}, base_url={self.llm.base_url}")
+
+            log("[INIT] 正在创建共享MCP工具(amap-mcp-server)...")
+            raw_amap_tool = MCPTool(
                 name="amap",
-                description="高德地图服务",
+                description="高德地图服务，支持 maps_text_search(关键词搜索POI)、maps_weather(天气查询)等操作",
                 server_command=["uvx", "amap-mcp-server"],
                 env={"AMAP_MAPS_API_KEY": settings.vite_amap_web_key},
                 auto_expand=True
             )
+            self.amap_tool = WrappedMCPTool(raw_amap_tool)
+            log("[INIT] MCP工具创建成功")
 
-            # 创建景点搜索Agent
-            print("  - 创建景点搜索Agent...")
+            log("[INIT] 正在创建景点搜索Agent...")
             self.attraction_agent = SimpleAgent(
                 name="景点搜索专家",
                 llm=self.llm,
@@ -188,8 +226,7 @@ class MultiAgentTripPlanner:
             )
             self.attraction_agent.add_tool(self.amap_tool)
 
-            # 创建天气查询Agent
-            print("  - 创建天气查询Agent...")
+            log("[INIT] 正在创建天气查询Agent...")
             self.weather_agent = SimpleAgent(
                 name="天气查询专家",
                 llm=self.llm,
@@ -197,8 +234,7 @@ class MultiAgentTripPlanner:
             )
             self.weather_agent.add_tool(self.amap_tool)
 
-            # 创建酒店推荐Agent
-            print("  - 创建酒店推荐Agent...")
+            log("[INIT] 正在创建酒店推荐Agent...")
             self.hotel_agent = SimpleAgent(
                 name="酒店推荐专家",
                 llm=self.llm,
@@ -206,23 +242,22 @@ class MultiAgentTripPlanner:
             )
             self.hotel_agent.add_tool(self.amap_tool)
 
-            # 创建行程规划Agent(不需要工具)
-            print("  - 创建行程规划Agent...")
+            log("[INIT] 正在创建行程规划Agent...")
             self.planner_agent = SimpleAgent(
                 name="行程规划专家",
                 llm=self.llm,
                 system_prompt=PLANNER_AGENT_PROMPT
             )
 
-            print(f"✅ 多智能体系统初始化成功")
-            print(f"   景点搜索Agent: {len(self.attraction_agent.list_tools())} 个工具")
-            print(f"   天气查询Agent: {len(self.weather_agent.list_tools())} 个工具")
-            print(f"   酒店推荐Agent: {len(self.hotel_agent.list_tools())} 个工具")
+            log(f"[INIT] 多智能体系统初始化成功!")
+            log(f"[INIT]   景点搜索Agent: {len(self.attraction_agent.list_tools())} 个工具")
+            log(f"[INIT]   天气查询Agent: {len(self.weather_agent.list_tools())} 个工具")
+            log(f"[INIT]   酒店推荐Agent: {len(self.hotel_agent.list_tools())} 个工具")
+            log("=" * 60)
 
         except Exception as e:
-            print(f"❌ 多智能体系统初始化失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            log(f"[INIT] 多智能体系统初始化失败: {str(e)}")
+            log(traceback.format_exc())
             raise
     
     async def plan_trip(self, request: TripRequest) -> TripPlan:
@@ -240,56 +275,118 @@ class MultiAgentTripPlanner:
             旅行计划
         """
         try:
-            print(f"\n{'='*60}")
-            print(f"🚀 开始多智能体协作规划旅行（并发优化模式）...")
-            print(f"目的地: {request.city}")
-            print(f"日期: {request.start_date} 至 {request.end_date}")
-            print(f"天数: {request.travel_days}天")
-            print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
-            print(f"{'='*60}\n")
+            log(f"\n{'='*60}")
+            log(f"[PLAN] 开始多智能体协作规划旅行")
+            log(f"[PLAN] 目的地: {request.city}")
+            log(f"[PLAN] 目的地bytes: {request.city.encode('utf-8')}")
+            log(f"[PLAN] 日期: {request.start_date} 至 {request.end_date}")
+            log(f"[PLAN] 天数: {request.travel_days}天")
+            log(f"[PLAN] 偏好: {', '.join(request.preferences) if request.preferences else '无'}")
+            log(f"[PLAN] 住宿: {request.accommodation}")
+            log(f"[PLAN] 交通: {request.transportation}")
+            log(f"[PLAN] stdout.encoding: {sys.stdout.encoding}")
+            log(f"{'='*60}\n")
 
-            # ========== 串行阶段: 步骤1-3 依次执行 ==========
-            print("⏳ 依次执行步骤1-3: 搜索景点 -> 查询天气 -> 搜索酒店...")
-
-            # 构建各Agent的查询
             attraction_query = self._build_attraction_query(request)
             weather_query = f"请查询{request.city}的天气信息"
             hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
 
-            # 依次执行,避免多个线程同时启动 uvx 子进程导致资源竞争和超时
-            print("  [1/3] 正在搜索景点...")
-            attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
-            print(f"📍 景点搜索结果: {attraction_response[:200]}...")
+            travel_dates = self._get_travel_dates(request)
 
-            print("  [2/3] 正在查询天气...")
-            weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
-            print(f"🌤️  天气查询结果: {weather_response[:200]}...")
+            # ========== 步骤1: 搜索景点 ==========
+            log(f"[STEP 1/4] 正在搜索景点...")
+            log(f"[STEP 1/4] 查询内容: {attraction_query[:200]}")
+            try:
+                attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
+                log(f"[STEP 1/4] 景点搜索完成, 响应长度={len(attraction_response)}")
+                log(f"[STEP 1/4] 响应预览: {attraction_response[:500]}")
+            except Exception as e:
+                log(f"[STEP 1/4] 景点搜索失败: {e}")
+                log(traceback.format_exc())
+                attraction_response = "景点搜索失败"
 
-            print("  [3/3] 正在搜索酒店...")
-            hotel_response = await asyncio.to_thread(self.hotel_agent.run, hotel_query)
-            print(f"🏨 酒店搜索结果: {hotel_response[:200]}...")
+            # ========== 步骤2: 查询天气 ==========
+            log(f"\n[STEP 2/4] 正在查询天气...")
+            log(f"[STEP 2/4] 查询内容: {weather_query}")
+            log(f"[STEP 2/4] 用户旅行日期: {[d.strftime('%Y-%m-%d') for d in travel_dates]}")
+            try:
+                weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
+                log(f"[STEP 2/4] 天气查询完成, 响应长度={len(weather_response)}")
+                log(f"[STEP 2/4] 响应预览: {weather_response[:500]}")
+            except Exception as e:
+                log(f"[STEP 2/4] 天气查询失败: {e}")
+                log(traceback.format_exc())
+                weather_response = "天气查询失败"
 
-            print(f"\n✅ 基础信息搜集完成\n")
+            weather_for_trip = self._build_weather_for_dates(weather_response, travel_dates, request.city)
+            log(f"[STEP 2/4] 最终天气信息:\n{weather_for_trip}")
 
-            # ========== 串行阶段: 步骤4 整合生成 ==========
-            print("📋 步骤4: 生成行程计划...")
-            planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response)
-            planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
-            print(f"行程规划结果: {planner_response[:300]}...\n")
+            # ========== 步骤3: 搜索酒店 ==========
+            log(f"\n[STEP 3/4] 正在搜索酒店...")
+            log(f"[STEP 3/4] 查询内容: {hotel_query}")
+            try:
+                hotel_response = await asyncio.to_thread(self.hotel_agent.run, hotel_query)
+                log(f"[STEP 3/4] 酒店搜索完成, 响应长度={len(hotel_response)}")
+                log(f"[STEP 3/4] 响应预览: {hotel_response[:500]}")
+            except Exception as e:
+                log(f"[STEP 3/4] 酒店搜索失败: {e}")
+                log(traceback.format_exc())
+                hotel_response = "酒店搜索失败"
+
+            log(f"\n[INFO] 基础信息搜集完成\n")
+
+            # ========== 步骤4: 整合生成行程 ==========
+            log(f"[STEP 4/4] 正在生成行程计划（直接调用LLM）...")
+            planner_query = self._build_planner_query(request, attraction_response, weather_for_trip, hotel_response)
+            log(f"[STEP 4/4] 规划查询长度: {len(planner_query)}")
+            try:
+                messages = [
+                    {"role": "system", "content": PLANNER_AGENT_PROMPT},
+                    {"role": "user", "content": planner_query},
+                ]
+
+                planner_response = ""
+                for attempt in range(3):
+                    log(f"[STEP 4/4] 第{attempt+1}次调用LLM...")
+                    raw = await asyncio.to_thread(self.llm.invoke, messages, max_tokens=8192)
+                    log(f"[STEP 4/4] 响应长度={len(raw)}, 预览: {raw[:300]}")
+
+                    if "<think>" in raw and "</think>" in raw:
+                        think_end = raw.find("</think>") + len("</think>")
+                        raw = raw[think_end:].strip()
+
+                    if "```json" in raw or (("{" in raw) and ("days" in raw)):
+                        planner_response = raw
+                        log(f"[STEP 4/4] 找到JSON响应!")
+                        break
+
+                    log(f"[STEP 4/4] 未找到JSON，追加重试指令...")
+                    messages.append({"role": "assistant", "content": raw})
+                    messages.append({"role": "user", "content": "你没有输出JSON。请不要调用任何工具，不要输出<tool_call>标签。所有信息已经提供给你了（包括天气信息，如果日期不匹配请根据季节推测）。请直接输出完整的```json代码块，只输出JSON，不要输出其他任何内容。"})
+
+                if not planner_response:
+                    planner_response = raw
+                    log(f"[STEP 4/4] 3次重试后仍未获得JSON")
+
+            except Exception as e:
+                log(f"[STEP 4/4] 行程规划失败: {e}")
+                log(traceback.format_exc())
+                raise
 
             # 解析最终计划
+            log(f"\n[PARSE] 正在解析行程规划响应...")
             trip_plan = self._parse_response(planner_response, request)
 
-            print(f"{'='*60}")
-            print(f"✅ 旅行计划生成完成!")
-            print(f"{'='*60}\n")
+            log(f"{'='*60}")
+            log(f"[DONE] 旅行计划生成完成!")
+            log(f"{'='*60}\n")
 
             return trip_plan
 
         except Exception as e:
-            print(f"❌ 生成旅行计划失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            log(f"[ERROR] 生成旅行计划失败: {str(e)}")
+            log(traceback.format_exc())
+            log(f"[FALLBACK] 使用备用方案生成计划")
             return self._create_fallback_plan(request)
     
     def _build_attraction_query(self, request: TripRequest) -> str:
@@ -302,8 +399,117 @@ class MultiAgentTripPlanner:
             keywords = "景点"
 
         # 直接返回工具调用格式，使用正确的工具名和严格的格式
-        query = f"请使用amap_maps_text_search工具搜索{request.city}的{keywords}相关的景点。\n非常重要：你必须直接输出 `[TOOL_CALL:amap_maps_text_search:keywords={keywords},city={request.city}]`，不要附带任何多余的 JSON 或文字说明！"
+        query = f"请使用amap工具搜索{request.city}的{keywords}相关的景点。\n非常重要：你必须直接输出 `[TOOL_CALL:amap:tool_name=maps_text_search,keywords={keywords},city={request.city}]`，不要附带任何多余的 JSON 或文字说明！"
         return query
+
+    @staticmethod
+    def _get_travel_dates(request: TripRequest) -> List[datetime]:
+        """根据请求中的 start_date / end_date 返回每一天的 datetime 列表"""
+        start = datetime.strptime(request.start_date, "%Y-%m-%d")
+        dates = [start + timedelta(days=i) for i in range(request.travel_days)]
+        return dates
+
+    def _build_weather_for_dates(
+        self, weather_response: str, travel_dates: List[datetime], city: str
+    ) -> str:
+        """
+        从天气 Agent 的原始响应中提取日期→天气映射，
+        然后针对用户实际旅行日期逐天输出：
+          - 如果 API 返回的日期覆盖了该天 → 直接使用
+          - 否则 → 根据月份和城市给出合理的季节性推测
+        返回纯文本，供 planner_query 使用。
+        """
+        date_weather_map: Dict[str, Dict[str, str]] = {}
+
+        date_blocks = re.split(r'(?=\d{4}-\d{2}-\d{2})', weather_response)
+        for block in date_blocks:
+            dm = re.match(r'(\d{4}-\d{2}-\d{2})', block)
+            if not dm:
+                continue
+            d_str = dm.group(1)
+
+            day_w = night_w = ""
+            day_t = night_t = ""
+
+            w_match = re.search(r'白天[：:\s]*([^\s|,，]+)', block)
+            if w_match:
+                day_w = w_match.group(1).rstrip('|｜')
+            nw_match = re.search(r'夜间[：:\s]*([^\s|,，]+)', block)
+            if nw_match:
+                night_w = nw_match.group(1).rstrip('|｜')
+
+            temps = re.findall(r'(\d+)\s*[°℃]', block)
+            if len(temps) >= 2:
+                day_t, night_t = temps[0], temps[1]
+            elif len(temps) == 1:
+                day_t = night_t = temps[0]
+
+            wind_dir = ""
+            wind_match = re.search(r'([\u4e00-\u9fa5]+风)', block)
+            if wind_match:
+                wind_dir = wind_match.group(1)
+
+            if day_w or day_t:
+                summary = f"白天{day_w or '未知'} 夜间{night_w or '未知'} 最高{day_t or '?'}°C 最低{night_t or '?'}°C"
+                if wind_dir:
+                    summary += f" {wind_dir}"
+                date_weather_map[d_str] = summary
+
+        log(f"[WEATHER] 从API响应中提取到 {len(date_weather_map)} 天天气: {list(date_weather_map.keys())}")
+
+        lines = []
+        for dt in travel_dates:
+            ds = dt.strftime("%Y-%m-%d")
+            if ds in date_weather_map:
+                lines.append(f"- {ds}: {date_weather_map[ds]}（实时预报）")
+            else:
+                est = self._estimate_weather_by_season(dt, city)
+                lines.append(f"- {ds}: {est}（根据季节推测，API未覆盖该日期）")
+
+        header = f"以下是 **{city}** 在用户旅行期间的天气信息：\n"
+        return header + "\n".join(lines)
+
+    @staticmethod
+    def _estimate_weather_by_season(dt: datetime, city: str) -> str:
+        """根据月份和城市粗略推测天气，用于 API 无法覆盖的日期"""
+        month = dt.month
+        city_lower = city.lower()
+
+        is_south = any(k in city_lower for k in [
+            "广州", "深圳", "海口", "三亚", "南宁", "昆明", "厦门", "福州",
+        ])
+        is_northeast = any(k in city_lower for k in [
+            "哈尔滨", "长春", "沈阳", "大连",
+        ])
+
+        if month in (3, 4, 5):
+            if is_south:
+                return "白天多云 夜间多云 最高26°C 最低18°C 偶有阵雨"
+            elif is_northeast:
+                return "白天晴 夜间晴 最高12°C 最低1°C 风力较大"
+            else:
+                return "白天晴 夜间多云 最高20°C 最低8°C 早晚温差大"
+        elif month in (6, 7, 8):
+            if is_south:
+                return "白天多云 夜间雷阵雨 最高34°C 最低26°C 注意防暑"
+            elif is_northeast:
+                return "白天晴 夜间多云 最高28°C 最低18°C"
+            else:
+                return "白天晴 夜间多云 最高33°C 最低22°C 注意防晒补水"
+        elif month in (9, 10, 11):
+            if is_south:
+                return "白天多云 夜间晴 最高28°C 最低20°C"
+            elif is_northeast:
+                return "白天晴 夜间晴 最高10°C 最低-2°C 注意保暖"
+            else:
+                return "白天晴 夜间多云 最高18°C 最低6°C 秋高气爽"
+        else:
+            if is_south:
+                return "白天晴 夜间多云 最高18°C 最低10°C"
+            elif is_northeast:
+                return "白天晴 夜间晴 最高-5°C 最低-18°C 注意防寒"
+            else:
+                return "白天晴 夜间晴 最高3°C 最低-6°C 注意保暖防风"
 
     def _build_planner_query(self, request: TripRequest, attractions: str, weather: str, hotels: str = "") -> str:
         """构建行程规划查询"""
@@ -330,9 +536,12 @@ class MultiAgentTripPlanner:
 1. 每天安排2-3个景点
 2. 每天必须包含早中晚三餐
 3. 每天推荐一个具体的酒店(从酒店信息中选择)
-3. 考虑景点之间的距离和交通方式
-4. 返回完整的JSON格式数据
-5. 景点的经纬度坐标要真实准确
+4. 考虑景点之间的距离和交通方式
+5. 返回完整的JSON格式数据
+6. 景点的经纬度坐标要真实准确
+7. **不要调用任何工具！所有信息已经提供给你了，直接生成JSON！**
+8. **只输出```json代码块，不要输出其他任何文字！不要输出<think>标签！**
+9. 天气信息已经按照用户的旅行日期整理好了，请直接使用，不需要再推测
 """
         if request.free_text_input:
             query += f"\n**额外要求:** {request.free_text_input}"
@@ -350,43 +559,72 @@ class MultiAgentTripPlanner:
         Returns:
             旅行计划
         """
+        from json_repair import repair_json
+
         try:
-            # 尝试从响应中提取JSON
-            # 查找JSON代码块
+            log(f"[PARSE] 响应总长度: {len(response)}")
+            log(f"[PARSE] 响应全文:\n{response[:2000]}")
+
             if "```json" in response:
                 json_start = response.find("```json") + 7
                 json_end = response.find("```", json_start)
-                json_str = response[json_start:json_end].strip()
+                if json_end == -1:
+                    json_str = response[json_start:].strip()
+                else:
+                    json_str = response[json_start:json_end].strip()
+                log(f"[PARSE] 从 ```json 代码块中提取, 长度={len(json_str)}")
             elif "```" in response:
                 json_start = response.find("```") + 3
                 json_end = response.find("```", json_start)
-                json_str = response[json_start:json_end].strip()
+                if json_end == -1:
+                    json_str = response[json_start:].strip()
+                else:
+                    json_str = response[json_start:json_end].strip()
+                log(f"[PARSE] 从 ``` 代码块中提取, 长度={len(json_str)}")
             elif "{" in response and "}" in response:
-                # 直接查找JSON对象
                 json_start = response.find("{")
                 json_end = response.rfind("}") + 1
                 json_str = response[json_start:json_end]
+                log(f"[PARSE] 从原始文本中提取JSON, 长度={len(json_str)}")
+            elif "{" in response:
+                json_start = response.find("{")
+                json_str = response[json_start:]
+                log(f"[PARSE] JSON可能被截断, 从 {{ 开始提取, 长度={len(json_str)}")
             else:
+                log(f"[PARSE] 响应中未找到任何JSON数据!")
                 raise ValueError("响应中未找到JSON数据")
-            
-            # 解析JSON
-            data = json.loads(json_str)
-            
-            # 转换为TripPlan对象
+
+            try:
+                data = json.loads(json_str)
+                log(f"[PARSE] 标准JSON解析成功")
+            except json.JSONDecodeError as je:
+                log(f"[PARSE] 标准JSON解析失败: {je}")
+                log(f"[PARSE] 使用 json_repair 修复...")
+                repaired = repair_json(json_str, return_objects=True)
+                if isinstance(repaired, dict):
+                    data = repaired
+                    log(f"[PARSE] json_repair 修复成功(dict)")
+                elif isinstance(repaired, str):
+                    data = json.loads(repaired)
+                    log(f"[PARSE] json_repair 修复成功(str->dict)")
+                else:
+                    raise ValueError(f"json_repair 返回了非dict类型: {type(repaired)}")
+
+            log(f"[PARSE] JSON解析成功, 顶层key: {list(data.keys())}")
+
             trip_plan = TripPlan(**data)
-            
+            log(f"[PARSE] TripPlan对象创建成功, {len(trip_plan.days)}天行程")
+
             return trip_plan
-            
+
         except Exception as e:
-            print(f"⚠️  解析响应失败: {str(e)}")
-            print(f"   将使用备用方案生成计划")
+            log(f"[PARSE] 解析响应失败: {str(e)}")
+            log(traceback.format_exc())
+            log(f"[PARSE] 将使用备用方案生成计划")
             return self._create_fallback_plan(request)
-    
+
     def _create_fallback_plan(self, request: TripRequest) -> TripPlan:
         """创建备用计划(当Agent失败时)"""
-        from datetime import datetime, timedelta
-        
-        # 解析日期
         start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
         
         # 创建每日行程

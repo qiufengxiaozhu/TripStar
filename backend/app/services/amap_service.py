@@ -3,7 +3,7 @@
 from typing import List, Dict, Any, Optional
 from hello_agents.tools import MCPTool
 from ..config import get_settings
-from ..models.schemas import Location, POIInfo, WeatherInfo
+from ..models.schemas import Location, POIInfo, WeatherInfo, RouteInfo
 
 # 全局MCP工具实例
 _amap_mcp_tool = None
@@ -126,19 +126,19 @@ class AmapService:
         origin_city: Optional[str] = None,
         destination_city: Optional[str] = None,
         route_type: str = "walking"
-    ) -> Dict[str, Any]:
+    ) -> RouteInfo:
         """
         规划路线
-        
+            
         Args:
             origin_address: 起点地址
             destination_address: 终点地址
             origin_city: 起点城市
             destination_city: 终点城市
             route_type: 路线类型 (walking/driving/transit)
-            
+                
         Returns:
-            路线信息
+            RouteInfo 对象
         """
         try:
             # 根据路线类型选择工具
@@ -147,15 +147,15 @@ class AmapService:
                 "driving": "maps_direction_driving_by_address",
                 "transit": "maps_direction_transit_integrated_by_address"
             }
-            
+                
             tool_name = tool_map.get(route_type, "maps_direction_walking_by_address")
-            
+                
             # 构建参数
             arguments = {
                 "origin_address": origin_address,
                 "destination_address": destination_address
             }
-            
+                
             # 公共交通需要城市参数
             if route_type == "transit":
                 if origin_city:
@@ -168,22 +168,33 @@ class AmapService:
                     arguments["origin_city"] = origin_city
                 if destination_city:
                     arguments["destination_city"] = destination_city
-            
-            # 调用MCP工具
+                
+            # 调用 MCP 工具
             result = self.mcp_tool.run({
                 "action": "call_tool",
                 "tool_name": tool_name,
                 "arguments": arguments
             })
-            
-            print(f"路线规划结果: {result[:200]}...")
-            
-            # TODO: 解析实际的路线数据
-            return {}
+                
+            print(f"路线规划结果：{result[:200]}...")
+                
+            # TODO: 解析实际的路线数据，这里先返回一个默认的 RouteInfo
+            return RouteInfo(
+                distance=0.0,
+                duration=0,
+                route_type=route_type,
+                description="路线规划成功，但数据解析功能待实现"
+            )
             
         except Exception as e:
-            print(f"❌ 路线规划失败: {str(e)}")
-            return {}
+            print(f"❌ 路线规划失败：{str(e)}")
+            # 返回错误信息的 RouteInfo
+            return RouteInfo(
+                distance=0.0,
+                duration=0,
+                route_type=route_type,
+                description=f"路线规划失败：{str(e)}"
+            )
     
     def geocode(self, address: str, city: Optional[str] = None) -> Optional[Location]:
         """

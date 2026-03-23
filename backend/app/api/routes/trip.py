@@ -28,12 +28,12 @@ async def plan_trip(request: TripRequest):
     """
     task_id = str(uuid.uuid4())[:8]
 
-    print(f"\n{'='*60}")
-    print(f"📥 收到旅行规划请求 (task_id={task_id}):")
-    print(f"   城市: {request.city}")
-    print(f"   日期: {request.start_date} - {request.end_date}")
-    print(f"   天数: {request.travel_days}")
-    print(f"{'='*60}\n")
+    print(f"\n{'='*60}", flush=True)
+    print(f"[REQUEST] 收到旅行规划请求 (task_id={task_id}):", flush=True)
+    print(f"[REQUEST]   城市: {request.city}", flush=True)
+    print(f"[REQUEST]   日期: {request.start_date} - {request.end_date}", flush=True)
+    print(f"[REQUEST]   天数: {request.travel_days}", flush=True)
+    print(f"{'='*60}\n", flush=True)
 
     # 将任务状态标记为进行中
     _tasks[task_id] = {"status": "processing", "progress": "正在初始化智能体..."}
@@ -56,7 +56,7 @@ async def _run_trip_planning(task_id: str, request: TripRequest):
         _tasks[task_id]["progress"] = "正在构建知识图谱..."
         graph_data = build_knowledge_graph(trip_plan)
 
-        print(f"✅ 任务 {task_id} 完成")
+        print(f"[TASK] 任务 {task_id} 完成", flush=True)
 
         _tasks[task_id] = {
             "status": "completed",
@@ -69,7 +69,7 @@ async def _run_trip_planning(task_id: str, request: TripRequest):
         }
 
     except Exception as e:
-        print(f"❌ 任务 {task_id} 失败: {e}")
+        print(f"[TASK] 任务 {task_id} 失败: {e}", flush=True)
         import traceback
         traceback.print_exc()
         _tasks[task_id] = {

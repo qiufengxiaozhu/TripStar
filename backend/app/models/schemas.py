@@ -60,10 +60,10 @@ class Location(BaseModel):
 class Attraction(BaseModel):
     """景点信息"""
     name: str = Field(..., description="景点名称")
-    address: str = Field(..., description="地址")
-    location: Location = Field(..., description="经纬度坐标")
-    visit_duration: int = Field(..., description="建议游览时间(分钟)")
-    description: str = Field(..., description="景点描述")
+    address: str = Field(default="", description="地址")
+    location: Optional[Location] = Field(default=None, description="经纬度坐标")
+    visit_duration: int = Field(default=120, description="建议游览时间(分钟)")
+    description: str = Field(default="", description="景点描述")
     category: Optional[str] = Field(default="景点", description="景点类别")
     rating: Optional[float] = Field(default=None, description="评分")
     photos: Optional[List[str]] = Field(default_factory=list, description="景点图片URL列表")
@@ -97,10 +97,10 @@ class Hotel(BaseModel):
 class DayPlan(BaseModel):
     """单日行程"""
     date: str = Field(..., description="日期 YYYY-MM-DD")
-    day_index: int = Field(..., description="第几天(从0开始)")
-    description: str = Field(..., description="当日行程描述")
-    transportation: str = Field(..., description="交通方式")
-    accommodation: str = Field(..., description="住宿")
+    day_index: int = Field(default=0, description="第几天(从0开始)")
+    description: str = Field(default="", description="当日行程描述")
+    transportation: str = Field(default="公共交通", description="交通方式")
+    accommodation: str = Field(default="", description="住宿")
     hotel: Optional[Hotel] = Field(default=None, description="推荐酒店")
     attractions: List[Attraction] = Field(default=[], description="景点列表")
     meals: List[Meal] = Field(default=[], description="餐饮列表")
@@ -142,11 +142,11 @@ class Budget(BaseModel):
 class TripPlan(BaseModel):
     """旅行计划"""
     city: str = Field(..., description="目的地城市")
-    start_date: str = Field(..., description="开始日期")
-    end_date: str = Field(..., description="结束日期")
-    days: List[DayPlan] = Field(..., description="每日行程")
+    start_date: str = Field(default="", description="开始日期")
+    end_date: str = Field(default="", description="结束日期")
+    days: List[DayPlan] = Field(default=[], description="每日行程")
     weather_info: List[WeatherInfo] = Field(default=[], description="天气信息")
-    overall_suggestions: str = Field(..., description="总体建议")
+    overall_suggestions: str = Field(default="", description="总体建议")
     budget: Optional[Budget] = Field(default=None, description="预算信息")
 
 

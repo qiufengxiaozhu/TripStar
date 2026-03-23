@@ -11,5 +11,6 @@ loguru>=0.7.0
 fastmcp>=2.0.0
 uv>=0.8.0
 python-dateutil>=2.8.2
+json-repair>=0.58.0
 huggingface_hub>=0.25.0
 pypinyin>=0.55.0

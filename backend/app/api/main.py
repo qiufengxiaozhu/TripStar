@@ -1,7 +1,14 @@
 """FastAPI主应用"""
 
 import os
+import sys
 from pathlib import Path
+
+if sys.platform == "win32":
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["PYTHONUTF8"] = "1"
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
