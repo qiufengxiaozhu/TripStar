@@ -3,7 +3,7 @@
 从 TripPlan 数据中提取实体(节点)和关系(边)，生成力导向图数据
 """
 
-from typing import Dict, Any, List
+from typing import Any
 from ..models.schemas import TripPlan
 
 
@@ -31,7 +31,7 @@ NODE_SIZES = {
 }
 
 
-def build_knowledge_graph(trip_plan: TripPlan) -> Dict[str, Any]:
+def build_knowledge_graph(trip_plan: TripPlan) -> dict[str, Any]:
     """
     从 TripPlan 构建知识图谱数据
 
@@ -42,8 +42,8 @@ def build_knowledge_graph(trip_plan: TripPlan) -> Dict[str, Any]:
             "categories": [{"name"}]
         }
     """
-    nodes: List[Dict[str, Any]] = []
-    edges: List[Dict[str, Any]] = []
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
     node_ids = set()
 
     # ---- 分类定义 (ECharts graph categories) ----

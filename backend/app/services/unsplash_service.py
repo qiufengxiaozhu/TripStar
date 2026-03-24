@@ -1,7 +1,7 @@
 """Unsplash图片服务"""
 
 import requests
-from typing import List, Optional
+from typing import Optional
 from ..config import get_settings
 
 class UnsplashService:
@@ -13,7 +13,7 @@ class UnsplashService:
         self.access_key = settings.unsplash_access_key
         self.base_url = "https://api.unsplash.com"
     
-    def search_photos(self, query: str, per_page: int = 5) -> List[dict]:
+    def search_photos(self, query: str, per_page: int = 5) -> list[dict]:
         """
         搜索图片
         

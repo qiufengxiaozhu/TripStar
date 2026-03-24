@@ -1,6 +1,6 @@
 """高德地图MCP服务封装"""
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 from hello_agents.tools import MCPTool
 from ..config import get_settings
 from ..models.schemas import Location, POIInfo, WeatherInfo, RouteInfo
@@ -54,7 +54,7 @@ class AmapService:
         """初始化服务"""
         self.mcp_tool = get_amap_mcp_tool()
     
-    def search_poi(self, keywords: str, city: str, citylimit: bool = True) -> List[POIInfo]:
+    def search_poi(self, keywords: str, city: str, citylimit: bool = True) -> list[POIInfo]:
         """
         搜索POI
         
@@ -90,7 +90,7 @@ class AmapService:
             print(f"❌ POI搜索失败: {str(e)}")
             return []
     
-    def get_weather(self, city: str) -> List[WeatherInfo]:
+    def get_weather(self, city: str) -> list[WeatherInfo]:
         """
         查询天气
         
@@ -227,7 +227,7 @@ class AmapService:
             print(f"❌ 地理编码失败: {str(e)}")
             return None
 
-    def get_poi_detail(self, poi_id: str) -> Dict[str, Any]:
+    def get_poi_detail(self, poi_id: str) -> dict[str, Any]:
         """
         获取POI详情
 

@@ -6,7 +6,7 @@ import sys
 import asyncio
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
@@ -403,14 +403,14 @@ class MultiAgentTripPlanner:
         return query
 
     @staticmethod
-    def _get_travel_dates(request: TripRequest) -> List[datetime]:
+    def _get_travel_dates(request: TripRequest) -> list[datetime]:
         """根据请求中的 start_date / end_date 返回每一天的 datetime 列表"""
         start = datetime.strptime(request.start_date, "%Y-%m-%d")
         dates = [start + timedelta(days=i) for i in range(request.travel_days)]
         return dates
 
     def _build_weather_for_dates(
-        self, weather_response: str, travel_dates: List[datetime], city: str
+        self, weather_response: str, travel_dates: list[datetime], city: str
     ) -> str:
         """
         从天气 Agent 的原始响应中提取日期→天气映射，
@@ -419,7 +419,7 @@ class MultiAgentTripPlanner:
           - 否则 → 根据月份和城市给出合理的季节性推测
         返回纯文本，供 planner_query 使用。
         """
-        date_weather_map: Dict[str, Dict[str, str]] = {}
+        date_weather_map: dict[str, dict[str, str]] = {}
 
         date_blocks = re.split(r'(?=\d{4}-\d{2}-\d{2})', weather_response)
         for block in date_blocks:

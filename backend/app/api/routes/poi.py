@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional
 from ...services.amap_service import get_amap_service
 from ...services.unsplash_service import get_unsplash_service
 

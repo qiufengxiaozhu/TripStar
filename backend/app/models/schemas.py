@@ -1,6 +1,6 @@
 """数据模型定义"""
 
-from typing import List, Optional, Union
+from typing import Optional, Union
 from pydantic import BaseModel, Field, field_validator
 from datetime import date
 
@@ -15,7 +15,7 @@ class TripRequest(BaseModel):
     travel_days: int = Field(..., description="旅行天数", ge=1, le=30, example=3)
     transportation: str = Field(..., description="交通方式", example="公共交通")
     accommodation: str = Field(..., description="住宿偏好", example="经济型酒店")
-    preferences: List[str] = Field(default=[], description="旅行偏好标签", example=["历史文化", "美食"])
+    preferences: list[str] = Field(default=[], description="旅行偏好标签", example=["历史文化", "美食"])
     free_text_input: Optional[str] = Field(default="", description="额外要求", example="希望多安排一些博物馆")
     
     class Config:
@@ -66,7 +66,7 @@ class Attraction(BaseModel):
     description: str = Field(default="", description="景点描述")
     category: Optional[str] = Field(default="景点", description="景点类别")
     rating: Optional[float] = Field(default=None, description="评分")
-    photos: Optional[List[str]] = Field(default_factory=list, description="景点图片URL列表")
+    photos: Optional[list[str]] = Field(default_factory=list, description="景点图片URL列表")
     poi_id: Optional[str] = Field(default="", description="POI ID")
     image_url: Optional[str] = Field(default=None, description="图片URL")
     ticket_price: int = Field(default=0, description="门票价格(元)")
@@ -102,8 +102,8 @@ class DayPlan(BaseModel):
     transportation: str = Field(default="公共交通", description="交通方式")
     accommodation: str = Field(default="", description="住宿")
     hotel: Optional[Hotel] = Field(default=None, description="推荐酒店")
-    attractions: List[Attraction] = Field(default=[], description="景点列表")
-    meals: List[Meal] = Field(default=[], description="餐饮列表")
+    attractions: list[Attraction] = Field(default=[], description="景点列表")
+    meals: list[Meal] = Field(default=[], description="餐饮列表")
 
 
 class WeatherInfo(BaseModel):
@@ -144,8 +144,8 @@ class TripPlan(BaseModel):
     city: str = Field(..., description="目的地城市")
     start_date: str = Field(default="", description="开始日期")
     end_date: str = Field(default="", description="结束日期")
-    days: List[DayPlan] = Field(default=[], description="每日行程")
-    weather_info: List[WeatherInfo] = Field(default=[], description="天气信息")
+    days: list[DayPlan] = Field(default=[], description="每日行程")
+    weather_info: list[WeatherInfo] = Field(default=[], description="天气信息")
     overall_suggestions: str = Field(default="", description="总体建议")
     budget: Optional[Budget] = Field(default=None, description="预算信息")
 
@@ -176,9 +176,9 @@ class GraphCategory(BaseModel):
 
 class KnowledgeGraphData(BaseModel):
     """知识图谱数据"""
-    nodes: List[GraphNode] = Field(default=[], description="节点列表")
-    edges: List[GraphEdge] = Field(default=[], description="边列表")
-    categories: List[GraphCategory] = Field(default=[], description="分类列表")
+    nodes: list[GraphNode] = Field(default=[], description="节点列表")
+    edges: list[GraphEdge] = Field(default=[], description="边列表")
+    categories: list[GraphCategory] = Field(default=[], description="分类列表")
 
 
 class TripPlanResponse(BaseModel):
@@ -203,7 +203,7 @@ class POISearchResponse(BaseModel):
     """POI搜索响应"""
     success: bool = Field(..., description="是否成功")
     message: str = Field(default="", description="消息")
-    data: List[POIInfo] = Field(default=[], description="POI列表")
+    data: list[POIInfo] = Field(default=[], description="POI列表")
 
 
 class RouteInfo(BaseModel):
@@ -225,7 +225,7 @@ class WeatherResponse(BaseModel):
     """天气查询响应"""
     success: bool = Field(..., description="是否成功")
     message: str = Field(default="", description="消息")
-    data: List[WeatherInfo] = Field(default=[], description="天气信息")
+    data: list[WeatherInfo] = Field(default=[], description="天气信息")
 
 
 # ============ 错误响应 ============
@@ -249,7 +249,7 @@ class TripChatRequest(BaseModel):
     """行程问答请求"""
     message: str = Field(..., description="用户提问内容")
     trip_plan: dict = Field(..., description="当前旅行计划(JSON对象)")
-    history: Optional[List[ChatMessage]] = Field(default=[], description="历史对话记录")
+    history: Optional[list[ChatMessage]] = Field(default=[], description="历史对话记录")
 
 
 class TripChatResponse(BaseModel):
